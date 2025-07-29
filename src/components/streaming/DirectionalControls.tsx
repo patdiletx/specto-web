@@ -1,6 +1,7 @@
 // src/components/streaming/DirectionalControls.tsx
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import {
@@ -15,11 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-type DirectionalControlsProps = {
-  channel: RealtimeChannel | null;
-};
-
-// Definimos un tipo para nuestras instrucciones para mantenerlo consistente
+// Definimos un tipo para nuestras instrucciones para mantenerlo consistente en toda la app
 type Instruction =
   | 'forward'
   | 'backward'
@@ -30,81 +27,97 @@ type Instruction =
   | 'zoom-in'
   | 'zoom-out';
 
+type DirectionalControlsProps = {
+  channel: RealtimeChannel | null;
+};
+
 export function DirectionalControls({ channel }: DirectionalControlsProps) {
+  // Estado para gestionar si los botones están en período de enfriamiento (cooldown)
+  const [isCoolingDown, setIsCoolingDown] = useState(false);
+
   const sendInstruction = (instruction: Instruction) => {
     if (!channel) {
       toast.error('No se ha establecido el canal de comunicación.');
       return;
     }
+    // Si estamos en cooldown, mostramos un aviso y no hacemos nada más.
+    if (isCoolingDown) {
+      toast.info('Espera un momento para enviar otra instrucción.');
+      return;
+    }
+
     console.log(`Enviando instrucción: ${instruction}`);
     channel.send({
       type: 'broadcast',
-      event: 'instruction',
+      event: 'instruction', // El evento que el Scout escuchará
       payload: { instruction },
     });
+
+    // Activamos el cooldown para prevenir spam
+    setIsCoolingDown(true);
+
+    // Después de 2 segundos, desactivamos el cooldown
+    setTimeout(() => {
+      setIsCoolingDown(false);
+    }, 2000); // Cooldown de 2 segundos
   };
+
+  /**
+   * Helper para renderizar un botón de control.
+   * Aplica el estado 'disabled' y un estilo de opacidad durante el cooldown.
+   * @param instruction El tipo de instrucción a enviar.
+   * @param icon El icono a mostrar en el botón.
+   * @param isIconOnly Si el botón solo debe mostrar un icono (para el tamaño).
+   */
+  const renderControlButton = (
+    instruction: Instruction,
+    icon: React.ReactNode,
+    isIconOnly: boolean = true
+  ) => (
+    <Button
+      size={isIconOnly ? 'icon' : 'default'}
+      variant="outline"
+      onClick={() => sendInstruction(instruction)}
+      disabled={isCoolingDown}
+      className="transition-opacity disabled:opacity-50"
+    >
+      {icon}
+    </Button>
+  );
 
   return (
     <div className="rounded-lg bg-gray-800/50 p-4 backdrop-blur-sm">
       <p className="mb-4 text-center font-semibold text-white">
         Controles del Scout
       </p>
-      <div className="grid grid-cols-3 justify-items-center gap-2">
-        <div></div>
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('forward')}
-        >
-          <ArrowUp />
-        </Button>
-        <div></div>
 
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('turn-left')}
-        >
-          <RotateCcw className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center text-xs text-white">DIRECCIÓN</div>
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('turn-right')}
-        >
-          <RotateCw className="h-5 w-5" />
-        </Button>
+      {/* Controles de movimiento y rotación */}
+      <div className="grid grid-cols-3 items-center justify-items-center gap-2">
+        {renderControlButton('turn-left', <RotateCcw className="h-5 w-5" />)}
+        {renderControlButton('forward', <ArrowUp />)}
+        {renderControlButton('turn-right', <RotateCw className="h-5 w-5" />)}
 
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('left')}
-        >
-          <ArrowLeft />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('backward')}
-        >
-          <ArrowDown />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={() => sendInstruction('right')}
-        >
-          <ArrowRight />
-        </Button>
+        {renderControlButton('left', <ArrowLeft />)}
+        {renderControlButton('backward', <ArrowDown />)}
+        {renderControlButton('right', <ArrowRight />)}
       </div>
-      <div className="mt-6 grid grid-cols-2 gap-2">
-        <Button variant="outline" onClick={() => sendInstruction('zoom-in')}>
-          <ZoomIn className="mr-2 h-4 w-4" /> Acercar
-        </Button>
-        <Button variant="outline" onClick={() => sendInstruction('zoom-out')}>
-          <ZoomOut className="mr-2 h-4 w-4" /> Alejar
-        </Button>
+
+      {/* Controles de Zoom */}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {renderControlButton(
+          'zoom-in',
+          <>
+            <ZoomIn className="mr-2 h-4 w-4" /> Acercar
+          </>,
+          false
+        )}
+        {renderControlButton(
+          'zoom-out',
+          <>
+            <ZoomOut className="mr-2 h-4 w-4" /> Alejar
+          </>,
+          false
+        )}
       </div>
     </div>
   );

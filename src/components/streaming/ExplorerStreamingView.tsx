@@ -21,7 +21,6 @@ type ExplorerStreamingViewProps = {
   currentUser: User;
 };
 
-// --- LA LÍNEA QUE FALTABA ---
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 
 let agoraClient: IAgoraRTCClient | null = null;
@@ -38,27 +37,33 @@ export function ExplorerStreamingView({
     useState<RealtimeChannel | null>(null);
   const hasJoinedRef = useRef(false);
 
+  // Efecto para el canal de Supabase (instrucciones y respuestas rápidas)
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase.channel(`instructions-for-${channelName}`);
+    const channel = supabase.channel(`mission-comms-${channelName}`);
+
+    channel.on('broadcast', { event: 'quick_reply' }, ({ payload }) => {
+      console.log('Respuesta rápida recibida:', payload.text);
+      toast.info(`Respuesta del Scout: ${payload.text}`);
+    });
+
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.log(
-          `Explorer suscrito al canal de instrucciones: instructions-for-${channelName}`
-        );
+        console.log(`Explorer suscrito al canal de Supabase: ${channelName}`);
       }
     });
     setSupabaseChannel(channel);
 
     return () => {
+      // La forma correcta de limpiar es remover el canal.
       supabase.removeChannel(channel);
     };
   }, [channelName]);
 
+  // Efecto para la lógica de video de Agora
   useEffect(() => {
     if (!agoraClient) {
       agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-      console.log('Cliente de Agora singleton (Explorer) inicializado.');
     }
     const client = agoraClient;
 
@@ -103,6 +108,7 @@ export function ExplorerStreamingView({
     };
   }, [channelName, userId]);
 
+  // Efecto de limpieza final al desmontar
   useEffect(() => {
     return () => {
       if (agoraClient && hasJoinedRef.current) {

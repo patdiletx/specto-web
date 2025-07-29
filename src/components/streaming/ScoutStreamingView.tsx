@@ -10,9 +10,11 @@ import AgoraRTC, {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { InstructionOverlay } from './InstructionOverlay';
+import { ScoutQuickReplies } from './ScoutQuickReplies'; // Importamos el nuevo componente
 import { MessageSquare } from 'lucide-react';
 import { ChatBox } from './ChatBox';
-import { User } from '@supabase/supabase-js';
+import { User, RealtimeChannel } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
 
 type ScoutStreamingViewProps = {
   missionDetails: {
@@ -38,7 +40,10 @@ export function ScoutStreamingView({
     useState<ILocalVideoTrack | null>(null);
   const [isJoined, setIsJoined] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [supabaseChannel, setSupabaseChannel] =
+    useState<RealtimeChannel | null>(null);
 
+  // Efecto para el cliente de Agora
   useEffect(() => {
     const agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
     setClient(agoraClient);
@@ -50,9 +55,25 @@ export function ScoutStreamingView({
     };
   }, []);
 
+  // Efecto para el canal de Supabase (para instrucciones y respuestas rápidas)
+  useEffect(() => {
+    const supabase = createClient();
+    // Usamos un nombre de canal consistente basado en el channelName de la misión
+    const channel = supabase.channel(`mission-comms-${channelName}`);
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`Scout suscrito al canal de Supabase: ${channelName}`);
+      }
+    });
+    setSupabaseChannel(channel);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [channelName]);
+
   const handleJoin = async () => {
     if (!client) return;
-
     try {
       await client.join(APP_ID, channelName, null, userId);
       toast.success(`Unido al canal: ${channelName}`);
@@ -91,6 +112,8 @@ export function ScoutStreamingView({
       <div id="local-video-player" className="h-full w-full"></div>
 
       <InstructionOverlay channelName={channelName} />
+
+      {isJoined && <ScoutQuickReplies channel={supabaseChannel} />}
 
       {showChat && (
         <div className="absolute top-4 right-4 bottom-24 z-20 w-80 rounded-lg bg-black/70 backdrop-blur-md">

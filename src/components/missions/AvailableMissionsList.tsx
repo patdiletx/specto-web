@@ -25,8 +25,8 @@ export function AvailableMissionsList() {
   const supabase = createClient();
   const router = useRouter();
 
+  // Efecto para cargar las misiones iniciales
   useEffect(() => {
-    // 1. Obtener la geolocalización del navegador
     if (!navigator.geolocation) {
       setError('La geolocalización no es soportada por tu navegador.');
       setIsLoading(false);
@@ -36,14 +36,12 @@ export function AvailableMissionsList() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-
-        // 2. Llamar a la función RPC de Supabase
         const { data, error: rpcError } = await supabase.rpc(
           'get_available_missions',
           {
             scout_lat: latitude,
             scout_lng: longitude,
-            search_radius_meters: 50000, // Buscar en un radio de 50km
+            search_radius_meters: 50000,
           }
         );
 
@@ -54,23 +52,39 @@ export function AvailableMissionsList() {
         }
         setIsLoading(false);
       },
-      (error) => {
-        setError(`Error de geolocalización: ${error.message}`);
+      (geoError) => {
+        setError(`Error de geolocalización: ${geoError.message}`);
         setIsLoading(false);
       }
     );
   }, [supabase]);
 
+  // --- ¡NUEVO EFECTO PARA ESCUCHAR NUEVAS MISIONES! ---
+  useEffect(() => {
+    const channel = supabase
+      .channel('new-missions-listener')
+      .on<Mission>(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'missions',
+        },
+        (payload) => {
+          console.log('¡Nueva misión creada!', payload.new);
+          toast.info(`Nueva misión disponible: "${payload.new.title}"`);
+          // Añadimos la nueva misión al principio de la lista
+          setMissions((currentMissions) => [payload.new, ...currentMissions]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
+
   const handleAcceptMission = async (missionId: number) => {
-    // Estado para deshabilitar el botón mientras se procesa
-    // Esto previene dobles clics y da feedback visual.
-    // Necesitarías añadir un estado en tu componente: const [isAccepting, setIsAccepting] = useState(false);
-    // y luego en el botón: disabled={isAccepting}
-
-    console.log(
-      `[1] Iniciando handleAcceptMission para la misión ID: ${missionId}`
-    );
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -79,53 +93,28 @@ export function AvailableMissionsList() {
       return;
     }
 
-    // Mostramos un toast de "cargando" para dar feedback inmediato.
-    const promise = new Promise(async (resolve, reject) => {
-      console.log(`[2] Ejecutando la actualización de Supabase...`);
-      const { error: updateError } = await supabase
-        .from('missions')
-        .update({
-          scout_id: user.id,
-          status: 'accepted',
-        })
-        .eq('id', missionId);
+    const { error: updateError } = await supabase
+      .from('missions')
+      .update({
+        scout_id: user.id,
+        status: 'accepted',
+      })
+      .eq('id', missionId);
 
-      if (updateError) {
-        console.error(
-          `[ERROR] Falló la actualización de Supabase:`,
-          updateError
-        );
-        reject(updateError);
-      } else {
-        console.log(`[3] Actualización de Supabase exitosa.`);
-        resolve(true);
-      }
-    });
-
-    toast.promise(promise, {
-      loading: 'Aceptando misión...',
-      success: () => {
-        console.log(`[4] Toast 'success'. Procediendo a la redirección...`);
-        // Usamos un pequeño timeout para asegurar que el toast se vea antes de navegar.
-        setTimeout(() => {
-          const targetUrl = `/dashboard/mission/${missionId}`;
-          console.log(`[5] Redirigiendo a: ${targetUrl}`);
-          router.push(targetUrl);
-        }, 500); // 500ms de espera
-
-        return '¡Misión aceptada! Preparando transmisión...';
-      },
-      error: (err) => {
-        console.error(`[ERROR] Toast 'error'.`, err);
-        return `Error al aceptar la misión: ${err.message}`;
-      },
-    });
+    if (updateError) {
+      toast.error('No se pudo aceptar la misión', {
+        description: updateError.message,
+      });
+    } else {
+      toast.success('¡Misión aceptada! Preparando transmisión...');
+      router.push(`/dashboard/mission/${missionId}`);
+    }
   };
 
   if (isLoading) return <p>Buscando misiones cercanas...</p>;
   if (error) return <p className="text-destructive">{error}</p>;
   if (missions.length === 0)
-    return <p>No hay misiones disponibles cerca de ti.</p>;
+    return <p>No hay misiones disponibles cerca de ti en este momento.</p>;
 
   return (
     <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
