@@ -2,7 +2,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
 import { ScoutStreamingView } from '@/components/streaming/ScoutStreamingView';
-// import { ExplorerStreamingView } from "@/components/streaming/ExplorerStreamingView"; // Lo usaremos más tarde
+import { ExplorerStreamingView } from '@/components/streaming/ExplorerStreamingView'; // Lo usaremos más tarde
 
 type MissionDetailPageProps = {
   params: {
@@ -70,7 +70,8 @@ export default async function MissionDetailPage({
       {isScout ? (
         <ScoutStreamingView missionDetails={missionDetails} />
       ) : (
-        <div className="p-8 text-white">Vista del Explorer (Próximamente)</div>
+        <ExplorerStreamingView missionDetails={missionDetails} />
+        // <div className="p-8 text-white">Vista del Explorer (Próximamente)</div>
       )}
     </div>
   );
