@@ -1,7 +1,7 @@
 // src/components/streaming/ScoutStreamingView.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import AgoraRTC, {
   IAgoraRTCClient,
@@ -50,7 +50,7 @@ export function ScoutStreamingView({
     useState<RealtimeChannel | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const { isCompleted } = useMissionStatus(mission, currentUser);
 
