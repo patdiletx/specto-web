@@ -2,8 +2,10 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-export const createClient = () => {
-  const cookieStore = cookies();
+// La función ahora es ASÍNCRONA
+export const createClient = async () => {
+  // Usamos 'await' para obtener el store de cookies
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,23 +13,20 @@ export const createClient = () => {
     {
       cookies: {
         get(name: string) {
-          // @ts-expect-error - El linter de TS a veces infiere incorrectamente el tipo aquí.
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
           try {
-            // @ts-expect-error - El linter de TS a veces infiere incorrectamente el tipo aquí.
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Se puede ignorar si el middleware está refrescando las sesiones.
+            // Ignorar errores en Componentes de Servidor
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            // @ts-expect-error - El linter de TS a veces infiere incorrectamente el tipo aquí.
             cookieStore.set({ name, value: '', ...options });
           } catch (error) {
-            // Se puede ignorar si el middleware está refrescando las sesiones.
+            // Ignorar errores en Componentes de Servidor
           }
         },
       },
