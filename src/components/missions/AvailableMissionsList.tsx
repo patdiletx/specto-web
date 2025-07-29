@@ -62,41 +62,64 @@ export function AvailableMissionsList() {
   }, [supabase]);
 
   const handleAcceptMission = async (missionId: number) => {
+    // Estado para deshabilitar el botón mientras se procesa
+    // Esto previene dobles clics y da feedback visual.
+    // Necesitarías añadir un estado en tu componente: const [isAccepting, setIsAccepting] = useState(false);
+    // y luego en el botón: disabled={isAccepting}
+
+    console.log(
+      `[1] Iniciando handleAcceptMission para la misión ID: ${missionId}`
+    );
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return toast.error('Debes estar logueado.');
-
-    // --- SOLUCIÓN: Optimistic UI Update ---
-    // 1. Guardamos una copia del estado actual por si necesitamos revertir.
-    const originalMissions = [...missions];
-
-    // 2. Actualizamos el estado local INMEDIATAMENTE para que la UI responda al instante.
-    // Filtramos la lista de misiones, quitando la que acabamos de aceptar.
-    setMissions((currentMissions) =>
-      currentMissions.filter((m) => m.id !== missionId)
-    );
-
-    // 3. Hacemos la llamada a la API en segundo plano.
-    const { error: updateError } = await supabase
-      .from('missions')
-      .update({
-        scout_id: user.id,
-        status: 'accepted',
-      })
-      .eq('id', missionId);
-
-    if (updateError) {
-      toast.error('No se pudo aceptar la misión', {
-        description: updateError.message,
-      });
-      // 4. Si la API falla, revertimos el estado al original.
-      setMissions(originalMissions);
-    } else {
-      toast.success('¡Misión aceptada!');
-      // Si la API tiene éxito, no hacemos nada más, la UI ya está actualizada.
-      // Ya no necesitamos router.refresh() aquí.
+    if (!user) {
+      toast.error('Debes estar logueado.');
+      return;
     }
+
+    // Mostramos un toast de "cargando" para dar feedback inmediato.
+    const promise = new Promise(async (resolve, reject) => {
+      console.log(`[2] Ejecutando la actualización de Supabase...`);
+      const { error: updateError } = await supabase
+        .from('missions')
+        .update({
+          scout_id: user.id,
+          status: 'accepted',
+        })
+        .eq('id', missionId);
+
+      if (updateError) {
+        console.error(
+          `[ERROR] Falló la actualización de Supabase:`,
+          updateError
+        );
+        reject(updateError);
+      } else {
+        console.log(`[3] Actualización de Supabase exitosa.`);
+        resolve(true);
+      }
+    });
+
+    toast.promise(promise, {
+      loading: 'Aceptando misión...',
+      success: () => {
+        console.log(`[4] Toast 'success'. Procediendo a la redirección...`);
+        // Usamos un pequeño timeout para asegurar que el toast se vea antes de navegar.
+        setTimeout(() => {
+          const targetUrl = `/dashboard/mission/${missionId}`;
+          console.log(`[5] Redirigiendo a: ${targetUrl}`);
+          router.push(targetUrl);
+        }, 500); // 500ms de espera
+
+        return '¡Misión aceptada! Preparando transmisión...';
+      },
+      error: (err) => {
+        console.error(`[ERROR] Toast 'error'.`, err);
+        return `Error al aceptar la misión: ${err.message}`;
+      },
+    });
   };
 
   if (isLoading) return <p>Buscando misiones cercanas...</p>;
