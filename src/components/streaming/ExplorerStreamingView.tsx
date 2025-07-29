@@ -7,25 +7,30 @@ import AgoraRTC, {
   IAgoraRTCRemoteUser,
 } from 'agora-rtc-sdk-ng';
 import { toast } from 'sonner';
-import { RealtimeChannel } from '@supabase/supabase-js';
+import { RealtimeChannel, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { DirectionalControls } from './DirectionalControls';
+import { ChatBox } from './ChatBox';
 
 type ExplorerStreamingViewProps = {
   missionDetails: {
     channelName: string;
     userId: string;
+    missionId: number;
   };
+  currentUser: User;
 };
 
+// --- LA LÍNEA QUE FALTABA ---
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 
-let agoraClient: IAgoraRTCClient | null = null; // Cliente Singleton
+let agoraClient: IAgoraRTCClient | null = null;
 
 export function ExplorerStreamingView({
   missionDetails,
+  currentUser,
 }: ExplorerStreamingViewProps) {
-  const { channelName, userId } = missionDetails;
+  const { channelName, userId, missionId } = missionDetails;
   const [remoteUser, setRemoteUser] = useState<IAgoraRTCRemoteUser | null>(
     null
   );
@@ -33,7 +38,6 @@ export function ExplorerStreamingView({
     useState<RealtimeChannel | null>(null);
   const hasJoinedRef = useRef(false);
 
-  // Efecto para la comunicación de Supabase (instrucciones)
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`instructions-for-${channelName}`);
@@ -51,7 +55,6 @@ export function ExplorerStreamingView({
     };
   }, [channelName]);
 
-  // Efecto para la lógica de video de Agora
   useEffect(() => {
     if (!agoraClient) {
       agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
@@ -64,12 +67,9 @@ export function ExplorerStreamingView({
       mediaType: 'video' | 'audio'
     ) => {
       await client.subscribe(user, mediaType);
-      if (mediaType === 'video' && user.videoTrack) {
+      if (mediaType === 'video' && user.videoTrack)
         user.videoTrack.play('remote-video-player');
-      }
-      if (mediaType === 'audio' && user.audioTrack) {
-        user.audioTrack.play();
-      }
+      if (mediaType === 'audio' && user.audioTrack) user.audioTrack.play();
       setRemoteUser(user);
     };
 
@@ -103,7 +103,6 @@ export function ExplorerStreamingView({
     };
   }, [channelName, userId]);
 
-  // Efecto de limpieza final al desmontar
   useEffect(() => {
     return () => {
       if (agoraClient && hasJoinedRef.current) {
@@ -127,8 +126,13 @@ export function ExplorerStreamingView({
         )}
       </div>
 
-      <div className="w-full flex-shrink-0 border-l border-gray-800 bg-gray-950 p-4 text-white md:w-80">
-        <DirectionalControls channel={supabaseChannel} />
+      <div className="flex w-full flex-shrink-0 flex-col border-l border-gray-800 bg-gray-950 text-white md:w-80">
+        <div className="border-b border-gray-700 p-4">
+          <DirectionalControls channel={supabaseChannel} />
+        </div>
+        <div className="min-h-0 flex-grow p-2">
+          <ChatBox missionId={missionId} currentUser={currentUser} />
+        </div>
       </div>
     </div>
   );
