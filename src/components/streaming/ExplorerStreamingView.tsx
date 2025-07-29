@@ -11,6 +11,10 @@ import { RealtimeChannel, User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { DirectionalControls } from './DirectionalControls';
 import { ChatBox } from './ChatBox';
+import { Database } from '@/types/supabase';
+import { useMissionStatus } from '@/hooks/useMissionStatus';
+
+type Mission = Database['public']['Tables']['missions']['Row'];
 
 type ExplorerStreamingViewProps = {
   missionDetails: {
@@ -19,53 +23,50 @@ type ExplorerStreamingViewProps = {
     missionId: number;
   };
   currentUser: User;
+  mission: Mission;
 };
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
 
-let agoraClient: IAgoraRTCClient | null = null;
-
 export function ExplorerStreamingView({
   missionDetails,
   currentUser,
+  mission,
 }: ExplorerStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
+
+  // --- SOLUCIÓN 1: Usar useRef para el cliente de Agora ---
+  const clientRef = useRef<IAgoraRTCClient | null>(null);
+
   const [remoteUser, setRemoteUser] = useState<IAgoraRTCRemoteUser | null>(
     null
   );
   const [supabaseChannel, setSupabaseChannel] =
     useState<RealtimeChannel | null>(null);
-  const hasJoinedRef = useRef(false);
 
-  // Efecto para el canal de Supabase (instrucciones y respuestas rápidas)
+  const { isCompleted } = useMissionStatus(mission, currentUser);
+
   useEffect(() => {
+    // Inicializamos el cliente una sola vez y lo guardamos en la referencia.
+    if (!clientRef.current) {
+      clientRef.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    }
+    const client = clientRef.current;
+
+    // Si la misión se completa, limpiamos.
+    if (isCompleted) {
+      if (client.connectionState === 'CONNECTED') client.leave();
+      setRemoteUser(null);
+      return;
+    }
+
     const supabase = createClient();
     const channel = supabase.channel(`mission-comms-${channelName}`);
-
     channel.on('broadcast', { event: 'quick_reply' }, ({ payload }) => {
-      console.log('Respuesta rápida recibida:', payload.text);
       toast.info(`Respuesta del Scout: ${payload.text}`);
     });
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log(`Explorer suscrito al canal de Supabase: ${channelName}`);
-      }
-    });
+    channel.subscribe();
     setSupabaseChannel(channel);
-
-    return () => {
-      // La forma correcta de limpiar es remover el canal.
-      supabase.removeChannel(channel);
-    };
-  }, [channelName]);
-
-  // Efecto para la lógica de video de Agora
-  useEffect(() => {
-    if (!agoraClient) {
-      agoraClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-    }
-    const client = agoraClient;
 
     const handleUserPublished = async (
       user: IAgoraRTCRemoteUser,
@@ -83,51 +84,37 @@ export function ExplorerStreamingView({
       setRemoteUser(null);
     };
 
-    const joinAndSetup = async () => {
-      if (hasJoinedRef.current) return;
-      hasJoinedRef.current = true;
-
+    const join = async () => {
+      if (client.connectionState !== 'DISCONNECTED') return;
       client.on('user-published', handleUserPublished);
       client.on('user-left', handleUserLeft);
-
-      try {
-        await client.join(APP_ID, channelName, null, userId);
-        toast.success('Conectado al canal de la misión.');
-      } catch (error) {
-        console.error('Error al unirse al canal de Agora:', error);
-        toast.error('No se pudo conectar al canal de la misión.');
-        hasJoinedRef.current = false;
-      }
+      await client.join(APP_ID, channelName, null, userId);
     };
-
-    joinAndSetup();
+    join();
 
     return () => {
+      supabase.removeChannel(channel);
       client.off('user-published', handleUserPublished);
       client.off('user-left', handleUserLeft);
+      if (client.connectionState === 'CONNECTED') client.leave();
     };
-  }, [channelName, userId]);
-
-  // Efecto de limpieza final al desmontar
-  useEffect(() => {
-    return () => {
-      if (agoraClient && hasJoinedRef.current) {
-        agoraClient.leave();
-        hasJoinedRef.current = false;
-      }
-    };
-  }, []);
+  }, [channelName, userId, isCompleted]);
 
   return (
     <div className="flex h-full w-full flex-col bg-black md:flex-row">
       <div className="relative flex flex-grow items-center justify-center bg-gray-900">
         <div id="remote-video-player" className="h-full w-full bg-black"></div>
-        {!remoteUser && (
+        {!remoteUser && !isCompleted && (
           <div className="absolute p-4 text-center text-white">
             <p className="text-2xl font-semibold">Esperando al Scout</p>
             <p className="text-lg text-gray-400">
               La transmisión comenzará automáticamente.
             </p>
+          </div>
+        )}
+        {isCompleted && (
+          <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
+            <p className="text-2xl font-semibold">Misión Completada</p>
           </div>
         )}
       </div>
