@@ -19,6 +19,8 @@ type InteractiveMapProps = {
   onMapClick?: (coords: MapCoordinates) => void;
   // If a map is for display only, it should not be interactive.
   isInteractive?: boolean;
+  route?: any; // GeoJSON object for the route
+  scoutLocation?: { lat: number; lng: number }; // Real-time scout location
 };
 
 export default function InteractiveMap({
@@ -28,6 +30,8 @@ export default function InteractiveMap({
   onMapClick,
   // Default to non-interactive if showing a fixed marker, otherwise interactive.
   isInteractive = !markerLocation,
+  route,
+  scoutLocation,
 }: InteractiveMapProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -73,6 +77,47 @@ export default function InteractiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapContainer.current]);
 
+  // Draw route on the map
+  useEffect(() => {
+    if (!map.current) return;
+
+    const mapInstance = map.current;
+
+    const handleLoad = () => {
+      if (route && !mapInstance.getSource('route')) {
+        mapInstance.addSource('route', {
+          type: 'geojson',
+          data: route,
+        });
+        mapInstance.addLayer({
+          id: 'route',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#3b82f6', // blue-500
+            'line-width': 5,
+            'line-opacity': 0.75,
+          },
+        });
+      }
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+      handleLoad();
+    } else {
+      mapInstance.on('load', handleLoad);
+    }
+
+    return () => {
+      // Clean up the event listener
+      mapInstance.off('load', handleLoad);
+    };
+  }, [route]);
+
   // Update map view when props change
   useEffect(() => {
     if (!map.current) return;
@@ -84,12 +129,22 @@ export default function InteractiveMap({
       speed: 1.5,
     });
 
-    // Update marker position or add/remove it
-    if (markerLocation) {
+    // Update marker for scout location
+    if (scoutLocation) {
+      if (marker.current) {
+        marker.current.setLngLat([scoutLocation.lng, scoutLocation.lat]);
+      } else {
+        marker.current = new mapboxgl.Marker({ color: '#3b82f6' }) // Blue for scout
+          .setLngLat([scoutLocation.lng, scoutLocation.lat])
+          .addTo(map.current);
+      }
+    }
+    // Update marker for mission destination (only if no scout location)
+    else if (markerLocation) {
       if (marker.current) {
         marker.current.setLngLat([markerLocation.lng, markerLocation.lat]);
       } else {
-        marker.current = new mapboxgl.Marker()
+        marker.current = new mapboxgl.Marker({ color: '#f43f5e' }) // Red for destination
           .setLngLat([markerLocation.lng, markerLocation.lat])
           .addTo(map.current);
       }
@@ -98,7 +153,7 @@ export default function InteractiveMap({
       marker.current.remove();
       marker.current = null;
     }
-  }, [center, markerLocation, zoom]);
+  }, [center, markerLocation, scoutLocation, zoom]);
 
   return (
     <div
