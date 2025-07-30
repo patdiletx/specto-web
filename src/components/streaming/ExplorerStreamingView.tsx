@@ -12,7 +12,6 @@ import { createClient } from '@/lib/supabase/client';
 import { DirectionalControls } from './DirectionalControls';
 import { ChatBox } from './ChatBox';
 import { Database } from '@/types/supabase';
-import { useMissionStatus } from '@/hooks/useMissionStatus';
 
 type Mission = Database['public']['Tables']['missions']['Row'];
 
@@ -24,6 +23,7 @@ type ExplorerStreamingViewProps = {
   };
   currentUser: User;
   mission: Mission;
+  isCompleted: boolean;
 };
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
@@ -32,6 +32,7 @@ export function ExplorerStreamingView({
   missionDetails,
   currentUser,
   mission,
+  isCompleted,
 }: ExplorerStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
 
@@ -43,8 +44,6 @@ export function ExplorerStreamingView({
   );
   const [supabaseChannel, setSupabaseChannel] =
     useState<RealtimeChannel | null>(null);
-
-  const { isCompleted } = useMissionStatus(mission, currentUser);
 
   useEffect(() => {
     // Inicializamos el cliente una sola vez y lo guardamos en la referencia.

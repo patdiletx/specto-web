@@ -22,7 +22,7 @@ function MissionContent({
   currentUser: User;
 }) {
   // Ahora, useMissionStatus solo se llama cuando 'mission' y 'currentUser' existen.
-  const { showRatingModal, setShowRatingModal } = useMissionStatus(
+  const { showRatingModal, setShowRatingModal, isCompleted } = useMissionStatus(
     mission,
     currentUser
   );
@@ -49,6 +49,7 @@ function MissionContent({
           missionDetails={missionDetails}
           currentUser={currentUser}
           mission={mission}
+          isCompleted={isCompleted}
         />
       )}
       {otherParticipantId && (
