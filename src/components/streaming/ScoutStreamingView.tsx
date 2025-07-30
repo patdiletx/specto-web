@@ -1,13 +1,8 @@
 // src/components/streaming/ScoutStreamingView.tsx
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import AgoraRTC, {
-  IAgoraRTCClient,
-  ILocalAudioTrack,
-  ILocalVideoTrack,
-} from 'agora-rtc-sdk-ng';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { InstructionOverlay } from './InstructionOverlay';
@@ -18,6 +13,7 @@ import { User, RealtimeChannel } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { useMissionStatus } from '@/hooks/useMissionStatus';
+import { useAgoraScout } from '@/hooks/useAgoraScout'; // <-- IMPORTAMOS EL NUEVO HOOK
 
 type Mission = Database['public']['Tables']['missions']['Row'];
 
@@ -31,8 +27,6 @@ type ScoutStreamingViewProps = {
   mission: Mission;
 };
 
-const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
-
 export function ScoutStreamingView({
   missionDetails,
   currentUser,
@@ -40,116 +34,78 @@ export function ScoutStreamingView({
 }: ScoutStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
 
-  const clientRef = useRef<IAgoraRTCClient | null>(null);
-  const localAudioTrackRef = useRef<ILocalAudioTrack | null>(null);
-  const localVideoTrackRef = useRef<ILocalVideoTrack | null>(null);
+  // Usamos el hook de Agora para toda la lógica de streaming
+  const { join, leave, isJoined, isJoining } = useAgoraScout();
 
-  const [isJoined, setIsJoined] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [supabaseChannel, setSupabaseChannel] =
     useState<RealtimeChannel | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   const { isCompleted } = useMissionStatus(mission, currentUser);
 
+  // Efecto para gestionar el canal de Supabase
   useEffect(() => {
-    // Inicialización del cliente de Agora
-    if (!clientRef.current) {
-      clientRef.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-    }
-    const client = clientRef.current;
-
-    // Gestión del canal de Supabase
+    const supabase = createClient();
     const channel = supabase.channel(`mission-comms-${channelName}`);
     channel.subscribe();
     setSupabaseChannel(channel);
-
-    // Limpieza al desmontar el componente permanentemente
     return () => {
       supabase.removeChannel(channel);
-      // Limpiamos los tracks y abandonamos el canal de Agora
-      localAudioTrackRef.current?.close();
-      localVideoTrackRef.current?.close();
-      if (client && client.connectionState === 'CONNECTED') {
-        client.leave();
-      }
     };
-  }, [channelName, supabase]);
+  }, [channelName]);
 
+  // Efecto que reacciona a la finalización de la misión
   useEffect(() => {
-    // Cuando el hook nos dice que la misión está completada, limpiamos y redirigimos.
     if (isCompleted) {
-      // No necesitamos limpiar los tracks aquí porque la función de limpieza del useEffect principal lo hará al desmontar.
-      router.push('/dashboard');
-    }
-  }, [isCompleted, router]);
-
-  const handleJoin = async () => {
-    const client = clientRef.current;
-    if (!client || isJoined) return;
-
-    try {
-      await client.join(APP_ID, channelName, null, userId);
-
-      const [audioTrack, videoTrack] =
-        await AgoraRTC.createMicrophoneAndCameraTracks();
-
-      // Guardamos los tracks en referencias
-      localAudioTrackRef.current = audioTrack;
-      localVideoTrackRef.current = videoTrack;
-
-      await client.publish([audioTrack, videoTrack]);
-
-      videoTrack.play('local-video-player');
-      setIsJoined(true);
-      toast.success('¡Transmisión iniciada!');
-    } catch (error: unknown) {
-      let errorMessage =
-        'Ocurrió un error. Revisa los permisos de cámara/micrófono.';
-      if (error instanceof Error) errorMessage = error.message;
-      toast.error('Error al iniciar transmisión', {
-        description: errorMessage,
+      // Si la misión se completa, abandonamos el canal de Agora
+      leave().then(() => {
+        router.push('/dashboard');
       });
-      console.error(error);
     }
+  }, [isCompleted, leave, router]);
+
+  const handleJoin = () => {
+    join({ channelName, userId });
   };
 
   const handleCompleteMission = async () => {
     setIsCompleting(true);
+    const supabase = createClient(); // Instancia fresca
     const { error } = await supabase
       .from('missions')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', missionId);
 
     if (error) {
+      console.error('Error al actualizar la misión en Supabase:', error);
       toast.error('Error al completar la misión', {
         description: error.message,
       });
-      // --- LA SOLUCIÓN ESTÁ AQUÍ ---
-      // Si hay un error, debemos resetear el estado de carga.
       setIsCompleting(false);
     }
-    // Si tiene éxito, no hacemos nada más. El hook `useMissionStatus` detectará
-    // el cambio en la base de datos y el `useEffect` que depende de `isCompleted`
-    // se encargará de la redirección. El botón desaparecerá con la página.
+    // Si tiene éxito, el hook 'useMissionStatus' se encargará del resto.
   };
 
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center bg-gray-900">
       <div id="local-video-player" className="h-full w-full"></div>
+
       <InstructionOverlay channelName={channelName} />
+
       {isJoined && <ScoutQuickReplies channel={supabaseChannel} />}
+
       {showChat && (
         <div className="absolute top-4 right-4 bottom-24 z-20 w-80 rounded-lg bg-black/70 backdrop-blur-md">
           <ChatBox missionId={missionId} currentUser={currentUser} />
         </div>
       )}
+
       <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-4">
         {!isJoined ? (
-          <Button onClick={handleJoin} size="lg">
-            Iniciar Transmisión
+          <Button onClick={handleJoin} disabled={isJoining} size="lg">
+            {isJoining ? 'Iniciando...' : 'Iniciar Transmisión'}
           </Button>
         ) : (
           <>

@@ -1,5 +1,5 @@
 // src/hooks/useMissionStatus.ts
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { User } from '@supabase/supabase-js';
@@ -11,16 +11,55 @@ export function useMissionStatus(mission: Mission, currentUser: User) {
   const [isCompleted, setIsCompleted] = useState(
     mission.status === 'completed'
   );
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = createClient();
 
   useEffect(() => {
-    // Sincronizar estado inicial por si la misión ya estaba completada al cargar
+    // Sincronizar el estado inicial una vez, en caso de que la misión ya esté completada al cargar.
     if (mission.status === 'completed') {
       setIsCompleted(true);
     }
 
-    const channel = supabase
-      .channel(`mission-status-${mission.id}`)
+    // Crear el canal de Supabase para esta misión específica.
+    const channel = supabase.channel(`mission-status-${mission.id}`);
+
+    // Definir la función que manejará los eventos de actualización.
+    const handleUpdate = async (payload: { new: Mission }) => {
+      console.log(
+        `[useMissionStatus] Evento UPDATE recibido. Nuevo estado: ${payload.new.status}`
+      );
+
+      if (payload.new.status === 'completed') {
+        console.log(
+          "[useMissionStatus] El estado es 'completed'. Actualizando estado y comprobando calificación."
+        );
+        setIsCompleted(true);
+
+        // Comprobar si el usuario ya ha calificado para evitar mostrar el modal de nuevo.
+        const { data, error } = await supabase
+          .from('ratings')
+          .select('id')
+          .eq('mission_id', mission.id)
+          .eq('rater_id', currentUser.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            '[useMissionStatus] Error al comprobar calificación existente:',
+            error
+          );
+        }
+
+        if (!data) {
+          console.log(
+            '[useMissionStatus] El usuario no ha calificado. Se mostrará el modal.'
+          );
+          setShowRatingModal(true);
+        }
+      }
+    };
+
+    // Suscribirse a los cambios de UPDATE en la tabla 'missions' para esta misión.
+    channel
       .on<Mission>(
         'postgres_changes',
         {
@@ -29,53 +68,27 @@ export function useMissionStatus(mission: Mission, currentUser: User) {
           table: 'missions',
           filter: `id=eq.${mission.id}`,
         },
-        async (payload) => {
-          console.log(
-            'Hook: Estado de la misión actualizado a',
-            payload.new.status
-          );
-
-          // Si el nuevo estado es 'completed', activamos nuestra lógica
-          if (payload.new.status === 'completed') {
-            setIsCompleted(true);
-
-            // Comprobamos si el usuario actual ya ha calificado esta misión
-            const { data, error } = await supabase
-              .from('ratings')
-              .select('id')
-              .eq('mission_id', mission.id)
-              .eq('rater_id', currentUser.id)
-              .maybeSingle();
-
-            if (error) {
-              console.error(
-                'Hook: Error al comprobar calificación existente:',
-                error
-              );
-            }
-
-            // Si no hay datos (la consulta no devolvió filas), significa que no ha calificado.
-            // Por lo tanto, mostramos el modal.
-            if (!data) {
-              console.log(
-                'Hook: El usuario no ha calificado. Mostrando modal.'
-              );
-              setShowRatingModal(true);
-            } else {
-              console.log(
-                'Hook: El usuario ya ha calificado. No se muestra el modal.'
-              );
-            }
-          }
-        }
+        handleUpdate
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) {
+          console.error(
+            `[useMissionStatus] Error al suscribirse al canal para la misión ${mission.id}:`,
+            err
+          );
+        }
+      });
 
+    // La función de limpieza se encarga de remover el canal cuando el componente se desmonta.
     return () => {
       supabase.removeChannel(channel);
     };
+
+    // --- LA CORRECCIÓN CLAVE ESTÁ AQUÍ ---
+    // Las dependencias son estables y solo dependen del ID de la misión y del usuario.
+    // Quitar `mission.status` previene que el efecto se vuelva a ejecutar innecesariamente,
+    // lo que causaba el error de "mismatch".
   }, [mission.id, supabase, currentUser.id]);
 
-  // Devolvemos ambos estados para que los componentes los puedan usar
   return { showRatingModal, setShowRatingModal, isCompleted };
 }
