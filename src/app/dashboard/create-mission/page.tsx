@@ -201,6 +201,8 @@ export default function CreateMissionPage() {
             <FormLabel>Ubicación en el Mapa</FormLabel>
             <div className="rounded-lg border p-1">
               <InteractiveMap
+                center={{ lat: 40.416775, lng: -3.70379 }}
+                zoom={10}
                 onMapClick={(coords) =>
                   form.setValue('location', coords, { shouldValidate: true })
                 }
