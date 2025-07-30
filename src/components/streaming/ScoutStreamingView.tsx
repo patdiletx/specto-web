@@ -1,7 +1,7 @@
 // src/components/streaming/ScoutStreamingView.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import AgoraRTC, {
   IAgoraRTCClient,
@@ -50,7 +50,7 @@ export function ScoutStreamingView({
     useState<RealtimeChannel | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const { isCompleted } = useMissionStatus(mission, currentUser);
 
@@ -117,23 +117,32 @@ export function ScoutStreamingView({
   };
 
   const handleCompleteMission = async () => {
+    console.log('[DEBUG] handleCompleteMission started.');
+    toast.info('[DEBUG] 1/4: Starting mission completion...');
     setIsCompleting(true);
+
+    console.log('[DEBUG] Calling Supabase to update mission...');
+    toast.info('[DEBUG] 2/4: Sending update to server...');
+
     const { error } = await supabase
       .from('missions')
       .update({ status: 'completed', completed_at: new Date().toISOString() })
       .eq('id', missionId);
 
+    console.log('[DEBUG] Supabase call finished. Error object:', error);
+    toast.info(`[DEBUG] 3/4: Server responded. Error: ${!!error}`);
+
     if (error) {
       toast.error('Error al completar la misión', {
-        description: error.message,
+        description: `[DEBUG] ${error.message}`,
       });
-      // --- LA SOLUCIÓN ESTÁ AQUÍ ---
-      // Si hay un error, debemos resetear el estado de carga.
+      console.error('[DEBUG] Supabase update error:', error);
       setIsCompleting(false);
+    } else {
+      toast.success('[DEBUG] 4/4: Update successful! Navigating...');
+      console.log('[DEBUG] Update successful. Navigating to /dashboard...');
+      router.push('/dashboard');
     }
-    // Si tiene éxito, no hacemos nada más. El hook `useMissionStatus` detectará
-    // el cambio en la base de datos y el `useEffect` que depende de `isCompleted`
-    // se encargará de la redirección. El botón desaparecerá con la página.
   };
 
   return (

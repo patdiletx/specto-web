@@ -1,5 +1,5 @@
 // src/hooks/useMissionStatus.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { User } from '@supabase/supabase-js';
@@ -11,7 +11,7 @@ export function useMissionStatus(mission: Mission, currentUser: User) {
   const [isCompleted, setIsCompleted] = useState(
     mission.status === 'completed'
   );
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     // Sincronizar estado inicial por si la misión ya estaba completada al cargar
@@ -74,8 +74,7 @@ export function useMissionStatus(mission: Mission, currentUser: User) {
     return () => {
       supabase.removeChannel(channel);
     };
-    // Usamos mission.status para que el hook se resincronice si la prop inicial cambia
-  }, [mission.id, mission.status, supabase, currentUser.id]);
+  }, [mission.id, supabase, currentUser.id]);
 
   // Devolvemos ambos estados para que los componentes los puedan usar
   return { showRatingModal, setShowRatingModal, isCompleted };
