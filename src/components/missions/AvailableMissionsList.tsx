@@ -15,11 +15,48 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import InteractiveMap from '../map/InteractiveMap';
 
-type Mission = Tables<'missions'>;
+type MissionWithDistance = Tables<'missions'> & {
+  distance_meters?: number;
+};
+
+function formatDistance(meters: number | undefined): string | null {
+  if (meters === undefined || meters === null) {
+    return null;
+  }
+  if (meters < 1000) {
+    return `A ${Math.round(meters)} m`;
+  }
+  return `A ${(meters / 1000).toFixed(1)} km`;
+}
+
+function parseLocation(location: unknown): { lng: number; lat: number } | null {
+  if (typeof location !== 'string' || !location.includes('POINT')) {
+    return null;
+  }
+  // Extracts coordinates from a string like "SRID=4326;POINT(-74.5 40)"
+  const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+  if (match && match.length >= 3) {
+    const lng = parseFloat(match[1]);
+    const lat = parseFloat(match[2]);
+    return { lng, lat };
+  }
+  return null;
+}
 
 export function AvailableMissionsList() {
-  const [missions, setMissions] = useState<Mission[]>([]);
+  const [missions, setMissions] = useState<MissionWithDistance[]>([]);
+  const [selectedMission, setSelectedMission] =
+    useState<MissionWithDistance | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
@@ -63,7 +100,7 @@ export function AvailableMissionsList() {
   useEffect(() => {
     const channel = supabase
       .channel('new-missions-listener')
-      .on<Mission>(
+      .on<MissionWithDistance>(
         'postgres_changes',
         {
           event: 'INSERT',
@@ -117,35 +154,96 @@ export function AvailableMissionsList() {
     return <p>No hay misiones disponibles cerca de ti en este momento.</p>;
 
   return (
-    <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {missions.map((mission) => (
-        <Card key={mission.id}>
-          <CardHeader>
-            <CardTitle>{mission.title}</CardTitle>
-            <CardDescription>
-              {mission.description || 'Sin descripción'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>
-              <strong>Duración:</strong> {mission.requested_duration_minutes}{' '}
-              min
-            </p>
-            <p>
-              <strong>Recompensa:</strong>{' '}
-              {(mission.price_cents / 100).toFixed(2)} €
-            </p>
-          </CardContent>
-          <CardFooter>
-            <Button
-              className="w-full"
-              onClick={() => handleAcceptMission(mission.id)}
-            >
-              Aceptar Misión
-            </Button>
-          </CardFooter>
-        </Card>
-      ))}
-    </div>
+    <>
+      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {missions.map((mission) => (
+          <Card key={mission.id}>
+            <CardHeader>
+              <CardTitle>{mission.title}</CardTitle>
+              <CardDescription>
+                {mission.description || 'Sin descripción'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p>
+                <strong>Duración:</strong> {mission.requested_duration_minutes}{' '}
+                min
+              </p>
+              <p>
+                <strong>Recompensa:</strong>{' '}
+                {(mission.price_cents / 100).toFixed(2)} €
+              </p>
+              {mission.distance_meters !== undefined && (
+                <p className="text-sm text-muted-foreground">
+                  {formatDistance(mission.distance_meters)}
+                </p>
+              )}
+            </CardContent>
+            <CardFooter className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setSelectedMission(mission)}
+              >
+                Ver Detalles
+              </Button>
+              <Button onClick={() => handleAcceptMission(mission.id)}>
+                Aceptar
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
+
+      {selectedMission && (
+        <Dialog
+          open={selectedMission !== null}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setSelectedMission(null);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[625px]">
+            <DialogHeader>
+              <DialogTitle>{selectedMission.title}</DialogTitle>
+              <DialogDescription>
+                {selectedMission.description || 'No hay descripción.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {(() => {
+                const missionLocation = parseLocation(selectedMission.location);
+                if (missionLocation) {
+                  return (
+                    <InteractiveMap
+                      center={missionLocation}
+                      markerLocation={missionLocation}
+                      isInteractive={false}
+                      zoom={15}
+                    />
+                  );
+                }
+                return (
+                  <p>La información de la ubicación no está disponible.</p>
+                );
+              })()}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedMission(null)}
+              >
+                Cerrar
+              </Button>
+              <Button
+                onClick={() => handleAcceptMission(selectedMission.id)}
+              >
+                Aceptar Misión
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
