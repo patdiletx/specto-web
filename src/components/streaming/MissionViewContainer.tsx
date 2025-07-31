@@ -91,6 +91,9 @@ export default function MissionViewContainer() {
         .select('*')
         .eq('id', missionIdParam)
         .single();
+
+      console.log('Fetched mission data:', missionData); // DEBUGGING
+
       if (error || !missionData) {
         router.push('/dashboard?error=not_found');
         return;

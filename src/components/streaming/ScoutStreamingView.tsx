@@ -10,6 +10,7 @@ import AgoraRTC, {
 } from 'agora-rtc-sdk-ng';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import InteractiveMap from '@/components/map/InteractiveMap';
 import { InstructionOverlay } from './InstructionOverlay';
 import { ScoutQuickReplies } from './ScoutQuickReplies';
 import { MessageSquare } from 'lucide-react';
@@ -18,6 +19,31 @@ import { User, RealtimeChannel } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { useMissionStatus } from '@/hooks/useMissionStatus';
+
+function parseLocation(location: any): { lng: number; lat: number } | null {
+  if (
+    location &&
+    typeof location === 'object' &&
+    location.type === 'Point' &&
+    Array.isArray(location.coordinates) &&
+    location.coordinates.length === 2
+  ) {
+    return {
+      lng: location.coordinates[0],
+      lat: location.coordinates[1],
+    };
+  }
+
+  // Mantenemos el parseo de string como fallback por si acaso
+  if (typeof location === 'string' && location.includes('POINT')) {
+    const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match && match.length >= 3) {
+      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+    }
+  }
+
+  return null;
+}
 
 type Mission = Database['public']['Tables']['missions']['Row'];
 
@@ -40,6 +66,18 @@ export function ScoutStreamingView({
 }: ScoutStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
 
+  const missionLocation = useMemo(
+    () => parseLocation(mission.location),
+    [mission.location],
+  );
+
+  const [mode, setMode] = useState<'navigation' | 'streaming'>('navigation');
+  const [scoutLocation, setScoutLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [route, setRoute] = useState<any>(null);
+
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const localAudioTrackRef = useRef<ILocalAudioTrack | null>(null);
   const localVideoTrackRef = useRef<ILocalVideoTrack | null>(null);
@@ -53,6 +91,73 @@ export function ScoutStreamingView({
   const supabase = useMemo(() => createClient(), []);
 
   const { isCompleted } = useMissionStatus(mission, currentUser);
+
+  useEffect(() => {
+    if (mode !== 'navigation' || !missionLocation) {
+      return;
+    }
+
+    const fetchRoute = async (startCoords: { lat: number; lng: number }) => {
+      const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+      if (!accessToken) {
+        console.error('Mapbox access token is not configured.');
+        toast.error('Error de configuración del mapa.');
+        return;
+      }
+
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.lng},${startCoords.lat};${missionLocation.lng},${missionLocation.lat}?geometries=geojson&access_token=${accessToken}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.routes && data.routes.length > 0) {
+          setRoute({
+            type: 'Feature',
+            properties: {},
+            geometry: data.routes[0].geometry,
+          });
+        } else {
+          console.error('No route found.', data);
+          toast.error('No se pudo calcular la ruta.');
+        }
+      } catch (error) {
+        console.error('Error fetching route:', error);
+        toast.error('Error al obtener la ruta.');
+      }
+    };
+
+    let routeFetched = false;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+
+        if (!routeFetched) {
+          fetchRoute(newLocation);
+          routeFetched = true;
+        }
+
+        setScoutLocation(newLocation);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        toast.error('Error de geolocalización', {
+          description: 'No se pudo obtener tu ubicación. Revisa los permisos.',
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [mode, missionLocation]);
 
   useEffect(() => {
     // Inicialización del cliente de Agora
@@ -145,40 +250,75 @@ export function ScoutStreamingView({
     }
   };
 
+  if (!missionLocation) {
+    return (
+      <div className="flex h-full items-center justify-center bg-gray-900 text-white">
+        Error: La ubicación de la misión no es válida.
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center bg-gray-900">
-      <div id="local-video-player" className="h-full w-full"></div>
-      <InstructionOverlay channelName={channelName} />
-      {isJoined && <ScoutQuickReplies channel={supabaseChannel} />}
-      {showChat && (
+      {mode === 'streaming' ? (
+        <>
+          <div id="local-video-player" className="h-full w-full"></div>
+          <InstructionOverlay channelName={channelName} />
+          {isJoined && <ScoutQuickReplies channel={supabaseChannel} />}
+        </>
+      ) : (
+        <div className="h-full w-full">
+          {!scoutLocation && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+              <p className="text-xl text-white">Obteniendo tu ubicación...</p>
+            </div>
+          )}
+          <InteractiveMap
+            center={scoutLocation || missionLocation}
+            scoutLocation={scoutLocation ?? undefined}
+            markerLocation={missionLocation}
+            route={route}
+            isInteractive={false}
+            zoom={15}
+          />
+        </div>
+      )}
+
+      {mode === 'streaming' && showChat && (
         <div className="absolute top-4 right-4 bottom-24 z-20 w-80 rounded-lg bg-black/70 backdrop-blur-md">
           <ChatBox missionId={missionId} currentUser={currentUser} />
         </div>
       )}
       <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 gap-4">
-        {!isJoined ? (
-          <Button onClick={handleJoin} size="lg">
-            Iniciar Transmisión
+        {mode === 'navigation' && (
+          <Button onClick={() => setMode('streaming')} size="lg">
+            He llegado, iniciar Stream
           </Button>
-        ) : (
-          <>
-            <Button
-              onClick={() => setShowChat(!showChat)}
-              variant="outline"
-              size="icon"
-            >
-              <MessageSquare />
-            </Button>
-            <Button
-              onClick={handleCompleteMission}
-              variant="destructive"
-              size="lg"
-              disabled={isCompleting}
-            >
-              {isCompleting ? 'Finalizando...' : 'Completar Misión'}
-            </Button>
-          </>
         )}
+        {mode === 'streaming' &&
+          (!isJoined ? (
+            <Button onClick={handleJoin} size="lg">
+              Iniciar Transmisión
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={() => setShowChat(!showChat)}
+                variant="outline"
+                size="icon"
+              >
+                <MessageSquare />
+              </Button>
+              <Button
+                onClick={handleCompleteMission}
+                variant="destructive"
+                size="lg"
+                disabled={isCompleting}
+              >
+                {isCompleting ? 'Finalizando...' : 'Completar Misión'}
+              </Button>
+            </>
+          ))}
       </div>
     </div>
   );
