@@ -12,6 +12,31 @@ import { createClient } from '@/lib/supabase/client';
 import { DirectionalControls } from './DirectionalControls';
 import { ChatBox } from './ChatBox';
 import { Database } from '@/types/supabase';
+import InteractiveMap from '../map/InteractiveMap';
+
+// Helper function to parse location from Supabase
+function parseLocation(location: any): { lng: number; lat: number } | null {
+  if (
+    location &&
+    typeof location === 'object' &&
+    location.type === 'Point' &&
+    Array.isArray(location.coordinates) &&
+    location.coordinates.length === 2
+  ) {
+    return {
+      lng: location.coordinates[0],
+      lat: location.coordinates[1],
+    };
+  }
+  // Fallback for string-based location
+  if (typeof location === 'string' && location.includes('POINT')) {
+    const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match && match.length >= 3) {
+      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+    }
+  }
+  return null;
+}
 
 type Mission = Database['public']['Tables']['missions']['Row'];
 
@@ -44,6 +69,10 @@ export function ExplorerStreamingView({
   );
   const [supabaseChannel, setSupabaseChannel] =
     useState<RealtimeChannel | null>(null);
+  const [scoutLocation, setScoutLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
 
   useEffect(() => {
     // Inicializamos el cliente una sola vez y lo guardamos en la referencia.
@@ -63,6 +92,9 @@ export function ExplorerStreamingView({
     const channel = supabase.channel(`mission-comms-${channelName}`);
     channel.on('broadcast', { event: 'quick_reply' }, ({ payload }) => {
       toast.info(`Respuesta del Scout: ${payload.text}`);
+    });
+    channel.on('broadcast', { event: 'scout_location_update' }, ({ payload }) => {
+      setScoutLocation({ lat: payload.lat, lng: payload.lng });
     });
     channel.subscribe();
     setSupabaseChannel(channel);
@@ -99,22 +131,30 @@ export function ExplorerStreamingView({
     };
   }, [channelName, userId, isCompleted]);
 
+  const missionLocation = parseLocation(mission.location);
   return (
     <div className="flex h-full w-full flex-col bg-black md:flex-row">
       <div className="relative flex flex-grow items-center justify-center bg-gray-900">
-        <div id="remote-video-player" className="h-full w-full bg-black"></div>
-        {!remoteUser && !isCompleted && (
-          <div className="absolute p-4 text-center text-white">
-            <p className="text-2xl font-semibold">Esperando al Scout</p>
-            <p className="text-lg text-gray-400">
-              La transmisión comenzará automáticamente.
-            </p>
-          </div>
-        )}
-        {isCompleted && (
-          <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
-            <p className="text-2xl font-semibold">Misión Completada</p>
-          </div>
+        {!remoteUser && !isCompleted && missionLocation ? (
+          <InteractiveMap
+            center={scoutLocation || missionLocation}
+            scoutLocation={scoutLocation ?? undefined}
+            markerLocation={missionLocation}
+            isInteractive={true}
+            zoom={15}
+          />
+        ) : (
+          <>
+            <div
+              id="remote-video-player"
+              className="h-full w-full bg-black"
+            ></div>
+            {isCompleted && (
+              <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
+                <p className="text-2xl font-semibold">Misión Completada</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
