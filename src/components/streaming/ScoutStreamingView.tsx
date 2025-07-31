@@ -20,6 +20,15 @@ import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { useMissionStatus } from '@/hooks/useMissionStatus';
 
+function parseLocation(location: unknown): { lng: number; lat: number } | null {
+  if (typeof location !== 'string' || !location.includes('POINT')) return null;
+  const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+  if (match && match.length >= 3) {
+    return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+  }
+  return null;
+}
+
 type Mission = Database['public']['Tables']['missions']['Row'];
 
 type ScoutStreamingViewProps = {
@@ -41,13 +50,10 @@ export function ScoutStreamingView({
 }: ScoutStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
 
-  if (!mission.destination_lat || !mission.destination_lng) {
-    return (
-      <div className="flex h-full items-center justify-center text-white">
-        Esperando detalles de la misión...
-      </div>
-    );
-  }
+  const missionLocation = useMemo(
+    () => parseLocation(mission.location),
+    [mission.location],
+  );
 
   const [mode, setMode] = useState<'navigation' | 'streaming'>('navigation');
   const [scoutLocation, setScoutLocation] = useState<{
@@ -71,7 +77,7 @@ export function ScoutStreamingView({
   const { isCompleted } = useMissionStatus(mission, currentUser);
 
   useEffect(() => {
-    if (mode !== 'navigation') {
+    if (mode !== 'navigation' || !missionLocation) {
       return;
     }
 
@@ -83,7 +89,7 @@ export function ScoutStreamingView({
         return;
       }
 
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.lng},${startCoords.lat};${mission.destination_lng},${mission.destination_lat}?geometries=geojson&access_token=${accessToken}`;
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.lng},${startCoords.lat};${missionLocation.lng},${missionLocation.lat}?geometries=geojson&access_token=${accessToken}`;
 
       try {
         const response = await fetch(url);
@@ -112,7 +118,6 @@ export function ScoutStreamingView({
           lng: position.coords.longitude,
         };
 
-        // Fetch route only on the first location update
         if (!routeFetched) {
           fetchRoute(newLocation);
           routeFetched = true;
@@ -136,7 +141,7 @@ export function ScoutStreamingView({
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [mode, mission.destination_lat, mission.destination_lng]);
+  }, [mode, missionLocation]);
 
   useEffect(() => {
     // Inicialización del cliente de Agora
@@ -229,6 +234,14 @@ export function ScoutStreamingView({
     }
   };
 
+  if (!missionLocation) {
+    return (
+      <div className="flex h-full items-center justify-center bg-gray-900 text-white">
+        Error: La ubicación de la misión no es válida.
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center bg-gray-900">
       {mode === 'streaming' ? (
@@ -245,17 +258,9 @@ export function ScoutStreamingView({
             </div>
           )}
           <InteractiveMap
-            center={
-              scoutLocation || {
-                lat: mission.destination_lat,
-                lng: mission.destination_lng,
-              }
-            }
+            center={scoutLocation || missionLocation}
             scoutLocation={scoutLocation ?? undefined}
-            markerLocation={{
-              lat: mission.destination_lat,
-              lng: mission.destination_lng,
-            }}
+            markerLocation={missionLocation}
             route={route}
             isInteractive={false}
             zoom={15}
