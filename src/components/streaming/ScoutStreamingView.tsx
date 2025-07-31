@@ -41,6 +41,14 @@ export function ScoutStreamingView({
 }: ScoutStreamingViewProps) {
   const { channelName, userId, missionId } = missionDetails;
 
+  if (!mission.destination_lat || !mission.destination_lng) {
+    return (
+      <div className="flex h-full items-center justify-center text-white">
+        Esperando detalles de la misión...
+      </div>
+    );
+  }
+
   const [mode, setMode] = useState<'navigation' | 'streaming'>('navigation');
   const [scoutLocation, setScoutLocation] = useState<{
     lat: number;
@@ -68,11 +76,6 @@ export function ScoutStreamingView({
     }
 
     const fetchRoute = async (startCoords: { lat: number; lng: number }) => {
-      if (!mission.destination_lat || !mission.destination_lng) {
-        console.error('Destination coordinates are missing.');
-        return;
-      }
-
       const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
       if (!accessToken) {
         console.error('Mapbox access token is not configured.');
@@ -241,24 +244,22 @@ export function ScoutStreamingView({
               <p className="text-xl text-white">Obteniendo tu ubicación...</p>
             </div>
           )}
-          {mission.destination_lat && mission.destination_lng && (
-            <InteractiveMap
-              center={
-                scoutLocation || {
-                  lat: mission.destination_lat,
-                  lng: mission.destination_lng,
-                }
-              }
-              scoutLocation={scoutLocation ?? undefined}
-              markerLocation={{
+          <InteractiveMap
+            center={
+              scoutLocation || {
                 lat: mission.destination_lat,
                 lng: mission.destination_lng,
-              }}
-              route={route}
-              isInteractive={false}
-              zoom={15}
-            />
-          )}
+              }
+            }
+            scoutLocation={scoutLocation ?? undefined}
+            markerLocation={{
+              lat: mission.destination_lat,
+              lng: mission.destination_lng,
+            }}
+            route={route}
+            isInteractive={false}
+            zoom={15}
+          />
         </div>
       )}
 
