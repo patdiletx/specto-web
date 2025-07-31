@@ -229,7 +229,7 @@ export function AvailableMissionsList() {
                     <InteractiveMap
                       center={missionLocation}
                       markerLocation={missionLocation}
-                      isInteractive={false}
+                      isInteractive={true}
                       zoom={15}
                     />
                   );
