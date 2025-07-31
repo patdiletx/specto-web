@@ -20,12 +20,28 @@ import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { useMissionStatus } from '@/hooks/useMissionStatus';
 
-function parseLocation(location: unknown): { lng: number; lat: number } | null {
-  if (typeof location !== 'string' || !location.includes('POINT')) return null;
-  const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-  if (match && match.length >= 3) {
-    return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+function parseLocation(location: any): { lng: number; lat: number } | null {
+  if (
+    location &&
+    typeof location === 'object' &&
+    location.type === 'Point' &&
+    Array.isArray(location.coordinates) &&
+    location.coordinates.length === 2
+  ) {
+    return {
+      lng: location.coordinates[0],
+      lat: location.coordinates[1],
+    };
   }
+
+  // Mantenemos el parseo de string como fallback por si acaso
+  if (typeof location === 'string' && location.includes('POINT')) {
+    const match = location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match && match.length >= 3) {
+      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
+    }
+  }
+
   return null;
 }
 
