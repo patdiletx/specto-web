@@ -68,7 +68,7 @@ export function ScoutStreamingView({
 
   const missionLocation = useMemo(
     () => parseLocation(mission.location),
-    [mission.location],
+    [mission.location]
   );
 
   const [mode, setMode] = useState<'navigation' | 'streaming'>('navigation');
@@ -151,7 +151,7 @@ export function ScoutStreamingView({
         enableHighAccuracy: true,
         timeout: 10000,
         maximumAge: 0,
-      },
+      }
     );
 
     return () => {
@@ -278,7 +278,7 @@ export function ScoutStreamingView({
             scoutLocation={scoutLocation ?? undefined}
             markerLocation={missionLocation}
             route={route}
-            isInteractive={false}
+            isInteractive={true}
             zoom={15}
           />
         </div>
