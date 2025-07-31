@@ -140,6 +140,14 @@ export function ScoutStreamingView({
         }
 
         setScoutLocation(newLocation);
+
+        if (supabaseChannel) {
+          supabaseChannel.send({
+            type: 'broadcast',
+            event: 'scout_location_update',
+            payload: { lat: newLocation.lat, lng: newLocation.lng },
+          });
+        }
       },
       (error) => {
         console.error('Geolocation error:', error);
@@ -157,7 +165,7 @@ export function ScoutStreamingView({
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, [mode, missionLocation]);
+  }, [mode, missionLocation, supabaseChannel]);
 
   useEffect(() => {
     // Inicialización del cliente de Agora
