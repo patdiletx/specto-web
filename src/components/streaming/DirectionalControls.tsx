@@ -87,7 +87,7 @@ export function DirectionalControls({ channel }: DirectionalControlsProps) {
 
   return (
     <div className="rounded-lg bg-gray-800/50 p-4 backdrop-blur-sm">
-      <p className="mb-4 text-center font-semibold text-white">
+      <p className="mb-4 text-center font-semibold text-black">
         Controles del Scout
       </p>
 
@@ -95,17 +95,17 @@ export function DirectionalControls({ channel }: DirectionalControlsProps) {
       <div className="grid grid-cols-3 items-center justify-items-center gap-2">
         {renderControlButton(
           'turn-left',
-          <RotateCcw className="h-5 w-5 text-white" />
+          <RotateCcw className="h-5 w-5 text-black" />
         )}
-        {renderControlButton('forward', <ArrowUp className="text-white" />)}
+        {renderControlButton('forward', <ArrowUp className="text-black" />)}
         {renderControlButton(
           'turn-right',
-          <RotateCw className="h-5 w-5 text-white" />
+          <RotateCw className="h-5 w-5 text-black" />
         )}
 
-        {renderControlButton('left', <ArrowLeft className="text-white" />)}
-        {renderControlButton('backward', <ArrowDown className="text-white" />)}
-        {renderControlButton('right', <ArrowRight className="text-white" />)}
+        {renderControlButton('left', <ArrowLeft className="text-black" />)}
+        {renderControlButton('backward', <ArrowDown className="text-black" />)}
+        {renderControlButton('right', <ArrowRight className="text-black" />)}
       </div>
 
       {/* Controles de Zoom */}
@@ -113,14 +113,14 @@ export function DirectionalControls({ channel }: DirectionalControlsProps) {
         {renderControlButton(
           'zoom-in',
           <>
-            <ZoomIn className="mr-2 h-4 w-4 text-white" /> Acercar
+            <ZoomIn className="mr-2 h-4 w-4 text-black" /> Acercar
           </>,
           false
         )}
         {renderControlButton(
           'zoom-out',
           <>
-            <ZoomOut className="mr-2 h-4 w-4 text-white" /> Alejar
+            <ZoomOut className="mr-2 h-4 w-4 text-black" /> Alejar
           </>,
           false
         )}
