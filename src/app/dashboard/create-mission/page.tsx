@@ -149,7 +149,8 @@ export default function CreateMissionPage() {
   };
 
   // Nueva función handler
-  const handleCenterOnUser = () => {
+  const handleCenterOnUser = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (userLocation) {
       setMapCenter(userLocation);
     } else {
@@ -244,7 +245,7 @@ export default function CreateMissionPage() {
               <Button
                 type="button"
                 size="icon"
-                className="absolute top-3 right-3 z-10 bg-background/80 backdrop-blur-sm"
+                className="absolute top-3 left-3 z-10 bg-background/80 backdrop-blur-sm"
                 variant="outline"
                 onClick={handleCenterOnUser}
               >
