@@ -1,6 +1,6 @@
 // src/components/missions/RealtimeMissionsList.tsx
 'use client';
-
+import { Button } from '@/components/ui/button';
 import { useEffect, useState, useRef } from 'react'; // Importar useRef
 import { createClient } from '@/lib/supabase/client';
 import type { MissionWithScout } from './MyMissionsList';
@@ -110,10 +110,7 @@ export function RealtimeMissionsList({
     // ... el JSX se queda exactamente igual ...
     <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {missions.map((mission) => (
-        <Card
-          key={mission.id}
-          className="transition-all duration-200"
-        >
+        <Card key={mission.id} className="transition-all duration-200">
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="flex-1 truncate">{mission.title}</CardTitle>
@@ -134,7 +131,7 @@ export function RealtimeMissionsList({
               </p>
             )}
           </CardContent>
-          <CardFooter className="flex justify-between items-center">
+          <CardFooter className="flex items-center justify-between">
             <p className="text-muted-foreground text-xs">
               Creada: {new Date(mission.created_at).toLocaleDateString()}
             </p>
