@@ -119,43 +119,69 @@ export function ExplorerStreamingView({
     };
   }, [channelName, userId, isCompleted]);
 
-  // --- RENDERIZADO CONDICIONAL CORREGIDO ---
-  const renderMainContent = () => {
-    // Si la transmisión está activa, mostrar el video
-    if (remoteUser && remoteUser.videoTrack) {
-      return <div id="remote-video-player" className="h-full w-full bg-black"></div>;
-    }
-
-    // Si la misión se completó, mostrar mensaje
-    if (isCompleted) {
-      return (
-        <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
+const renderMainContent = () => {
+  // 1. Si la misión está completada, mostrar mensaje.
+  if (isCompleted) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="rounded-lg bg-black/50 p-4 text-center text-white">
           <p className="text-2xl font-semibold">Misión Completada</p>
         </div>
-      );
-    }
-
-    // Si no hay video, mostrar el mapa de seguimiento
-    if (missionLocation) {
-        return (
-            <InteractiveMap
-              center={scoutLocation || missionLocation}
-              scoutLocation={scoutLocation || undefined}
-              markerLocation={missionLocation}
-              isInteractive={true}
-              zoom={15}
-            />
-        );
-    }
-
-    // Estado de carga por defecto
-    return (
-      <div className="absolute p-4 text-center text-white">
-        <p className="text-2xl font-semibold">Esperando al Scout</p>
-        <p className="text-lg text-gray-400">La transmisión comenzará automáticamente.</p>
       </div>
     );
-  };
+  }
+
+  // 2. Si el Scout está en camino (estado 'accepted'), mostrar el mapa de seguimiento.
+  if (mission.status === 'accepted' && missionLocation) {
+    return (
+      <InteractiveMap
+        center={scoutLocation || missionLocation}
+        scoutLocation={scoutLocation || undefined}
+        markerLocation={missionLocation}
+        isInteractive={true}
+        zoom={15}
+      />
+    );
+  }
+
+  // 3. Si la misión está 'in_progress' o si ya hay un 'remoteUser',
+  //    preparamos la vista de video.
+  if (mission.status === 'in_progress' || remoteUser) {
+    return (
+      <>
+        {/* El contenedor de video siempre está presente, listo para recibir el stream. */}
+        <div id="remote-video-player" className="h-full w-full bg-black"></div>
+
+        {/* El botón de Play se superpone si el autoplay falla. */}
+        {showPlayButton && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+            <Button size="lg" onClick={handlePlay}>
+              <Play className="mr-2 h-5 w-5" /> Iniciar Video
+            </Button>
+          </div>
+        )}
+
+        {/* Mientras el video no llegue, mostramos "Conectando..." */}
+        {!remoteUser && !showPlayButton && (
+           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+              <div className="p-4 text-center text-white bg-black/40 rounded-lg">
+                  <p className="text-2xl font-semibold">Conectando...</p>
+              </div>
+           </div>
+        )}
+      </>
+    );
+  }
+
+  // 4. Estado por defecto mientras se carga.
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="p-4 text-center text-white">
+        <p className="text-2xl font-semibold">Cargando Misión...</p>
+      </div>
+    </div>
+  );
+};
 
   return (
     <div className="flex h-full w-full flex-col bg-black md:flex-row">
