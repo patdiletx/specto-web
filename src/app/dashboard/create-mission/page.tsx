@@ -60,6 +60,7 @@ export default function CreateMissionPage() {
 
   const [mapCenter, setMapCenter] = useState({ lat: 40.416775, lng: -3.70379 });
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null); // Nuevo estado
+  const [mapKey, setMapKey] = useState(Date.now());
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -153,6 +154,7 @@ export default function CreateMissionPage() {
     e.stopPropagation();
     if (userLocation) {
       setMapCenter(userLocation);
+      setMapKey(Date.now());
     } else {
       toast.error('No se ha podido acceder a tu ubicación. Revisa los permisos del navegador.');
     }
@@ -235,6 +237,7 @@ export default function CreateMissionPage() {
             {/* Añade 'relative' al contenedor del mapa */}
             <div className="relative rounded-lg border p-1 h-[400px] md:h-full">
               <InteractiveMap
+                key={mapKey}
                 center={mapCenter}
                 zoom={14} // Un zoom inicial más cercano es mejor
                 onMapClick={(coords) =>
