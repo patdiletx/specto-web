@@ -1,50 +1,31 @@
 // src/components/streaming/ExplorerStreamingView.tsx
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react'; // Añadir useMemo
+import { useEffect, useRef, useState } from 'react';
 import AgoraRTC, {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
 } from 'agora-rtc-sdk-ng';
 import { toast } from 'sonner';
-import { RealtimeChannel, User } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Play } from 'lucide-react';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { DirectionalControls } from './DirectionalControls';
 import { ChatBox } from './ChatBox';
 import { Database } from '@/types/supabase';
-import InteractiveMap from '../map/InteractiveMap'; // Importar el mapa
 
 type Mission = Database['public']['Tables']['missions']['Row'];
 
 type ExplorerStreamingViewProps = {
-  missionDetails: {
-    channelName: string;
-    userId: string;
-    missionId: number;
-  };
+  missionDetails: { channelName: string; userId: string; missionId: number };
   currentUser: User;
   mission: Mission;
   isCompleted: boolean;
 };
 
 const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
-
-// Función helper para parsear la ubicación
-function parseLocation(location: any): { lng: number; lat: number } | null {
-  if (
-    location &&
-    typeof location === 'object' &&
-    location.type === 'Point' &&
-    Array.isArray(location.coordinates) &&
-    location.coordinates.length === 2
-  ) {
-    return {
-      lng: location.coordinates[0],
-      lat: location.coordinates[1],
-    };
-  }
-  return null;
-}
 
 export function ExplorerStreamingView({
   missionDetails,
@@ -55,112 +36,100 @@ export function ExplorerStreamingView({
   const { channelName, userId, missionId } = missionDetails;
 
   const clientRef = useRef<IAgoraRTCClient | null>(null);
-  const [remoteUser, setRemoteUser] = useState<IAgoraRTCRemoteUser | null>(null);
-  const [supabaseChannel, setSupabaseChannel] = useState<RealtimeChannel | null>(null);
-
-  // --- ESTADOS Y VARIABLES CORREGIDOS ---
-  const [scoutLocation, setScoutLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const missionLocation = useMemo(() => parseLocation(mission.location), [mission.location]);
+  const videoPlayerRef = useRef<HTMLDivElement>(null);
+  const [supabaseChannel, setSupabaseChannel] =
+    useState<RealtimeChannel | null>(null);
+  const [remoteUser, setRemoteUser] = useState<IAgoraRTCRemoteUser | null>(
+    null
+  );
+  const [showPlayButton, setShowPlayButton] = useState(false);
 
   useEffect(() => {
-    if (!clientRef.current) {
-      clientRef.current = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-    }
-    const client = clientRef.current;
+    if (isCompleted) return;
 
-    if (isCompleted) {
-      if (client.connectionState === 'CONNECTED') client.leave();
-      setRemoteUser(null);
-      return;
-    }
+    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+    clientRef.current = client;
 
-    const supabase = createClient();
-    const channel = supabase.channel(`mission-comms-${channelName}`);
+    AgoraRTC.onAutoplayFailed = () => setShowPlayButton(true);
 
-    // Listener para respuestas rápidas
-    channel.on('broadcast', { event: 'quick_reply' }, ({ payload }) => {
-      toast.info(`Respuesta del Scout: ${payload.text}`);
-    });
-
-    // --- LISTENER CORREGIDO PARA UBICACIÓN ---
-    channel.on('broadcast', { event: 'scout_location_update' }, ({ payload }) => {
-      console.log('Scout location update received:', payload); // Para depurar
-      setScoutLocation({ lat: payload.lat, lng: payload.lng });
-    });
-
-    channel.subscribe();
-    setSupabaseChannel(channel);
-
-    const handleUserPublished = async (user: IAgoraRTCRemoteUser, mediaType: 'video' | 'audio') => {
+    const handleUserPublished = async (
+      user: IAgoraRTCRemoteUser,
+      mediaType: 'video' | 'audio'
+    ) => {
       await client.subscribe(user, mediaType);
-      if (mediaType === 'video' && user.videoTrack) user.videoTrack.play('remote-video-player');
-      if (mediaType === 'audio' && user.audioTrack) user.audioTrack.play();
+      if (mediaType === 'video' && videoPlayerRef.current) {
+        user.videoTrack?.play(videoPlayerRef.current);
+      }
+      if (mediaType === 'audio') {
+        user.audioTrack?.play();
+      }
       setRemoteUser(user);
     };
 
     const handleUserLeft = () => {
-      toast.info('El Scout ha finalizado la transmisión.');
       setRemoteUser(null);
+      toast.info('El Scout ha finalizado la transmisión.');
     };
 
-    const join = async () => {
-      if (client.connectionState !== 'DISCONNECTED') return;
+    const joinChannel = async () => {
       client.on('user-published', handleUserPublished);
       client.on('user-left', handleUserLeft);
       await client.join(APP_ID, channelName, null, userId);
     };
-    join();
+
+    joinChannel();
+
+    const supabase = createClient();
+    const channel = supabase.channel(`mission-comms-${channelName}`);
+    channel.on('broadcast', { event: 'quick_reply' }, ({ payload }) =>
+      toast.info(`Respuesta del Scout: ${payload.text}`)
+    );
+    setSupabaseChannel(channel);
+    channel.subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
       client.off('user-published', handleUserPublished);
       client.off('user-left', handleUserLeft);
-      if (client.connectionState === 'CONNECTED') client.leave();
+      client.leave();
+      supabase.removeChannel(channel);
+      AgoraRTC.onAutoplayFailed = () => {};
     };
   }, [channelName, userId, isCompleted]);
 
-  // --- RENDERIZADO CONDICIONAL CORREGIDO ---
-  const renderMainContent = () => {
-    // Si la transmisión está activa, mostrar el video
-    if (remoteUser && remoteUser.videoTrack) {
-      return <div id="remote-video-player" className="h-full w-full bg-black"></div>;
+  const handlePlay = async () => {
+    if (remoteUser && videoPlayerRef.current) {
+      try {
+        await remoteUser.audioTrack?.play();
+        await remoteUser.videoTrack?.play(videoPlayerRef.current);
+        setShowPlayButton(false);
+      } catch (e) {
+        toast.error('No se pudo iniciar la reproducción.');
+      }
     }
-
-    // Si la misión se completó, mostrar mensaje
-    if (isCompleted) {
-      return (
-        <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
-          <p className="text-2xl font-semibold">Misión Completada</p>
-        </div>
-      );
-    }
-
-    // Si no hay video, mostrar el mapa de seguimiento
-    if (missionLocation) {
-        return (
-            <InteractiveMap
-              center={scoutLocation || missionLocation}
-              scoutLocation={scoutLocation || undefined}
-              markerLocation={missionLocation}
-              isInteractive={true}
-              zoom={15}
-            />
-        );
-    }
-
-    // Estado de carga por defecto
-    return (
-      <div className="absolute p-4 text-center text-white">
-        <p className="text-2xl font-semibold">Esperando al Scout</p>
-        <p className="text-lg text-gray-400">La transmisión comenzará automáticamente.</p>
-      </div>
-    );
   };
 
   return (
     <div className="flex h-full w-full flex-col bg-black md:flex-row">
       <div className="relative flex flex-grow items-center justify-center bg-gray-900">
-        {renderMainContent()}
+        <div
+          ref={videoPlayerRef}
+          id="remote-video-player"
+          className="h-full w-full bg-black"
+        ></div>
+
+        {!remoteUser && !showPlayButton && (
+          <div className="pointer-events-none absolute p-4 text-center text-white">
+            <p className="text-2xl font-semibold">Esperando al Scout...</p>
+          </div>
+        )}
+
+        {showPlayButton && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+            <Button size="lg" onClick={handlePlay}>
+              <Play className="mr-2 h-5 w-5" /> Iniciar Video
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex w-full flex-shrink-0 flex-col border-l border-gray-800 bg-gray-950 text-white md:w-80">
