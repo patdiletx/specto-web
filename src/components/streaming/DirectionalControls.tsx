@@ -93,13 +93,19 @@ export function DirectionalControls({ channel }: DirectionalControlsProps) {
 
       {/* Controles de movimiento y rotación */}
       <div className="grid grid-cols-3 items-center justify-items-center gap-2">
-        {renderControlButton('turn-left', <RotateCcw className="h-5 w-5" />)}
-        {renderControlButton('forward', <ArrowUp />)}
-        {renderControlButton('turn-right', <RotateCw className="h-5 w-5" />)}
+        {renderControlButton(
+          'turn-left',
+          <RotateCcw className="h-5 w-5 text-white" />
+        )}
+        {renderControlButton('forward', <ArrowUp className="text-white" />)}
+        {renderControlButton(
+          'turn-right',
+          <RotateCw className="h-5 w-5 text-white" />
+        )}
 
-        {renderControlButton('left', <ArrowLeft />)}
-        {renderControlButton('backward', <ArrowDown />)}
-        {renderControlButton('right', <ArrowRight />)}
+        {renderControlButton('left', <ArrowLeft className="text-white" />)}
+        {renderControlButton('backward', <ArrowDown className="text-white" />)}
+        {renderControlButton('right', <ArrowRight className="text-white" />)}
       </div>
 
       {/* Controles de Zoom */}
@@ -107,14 +113,14 @@ export function DirectionalControls({ channel }: DirectionalControlsProps) {
         {renderControlButton(
           'zoom-in',
           <>
-            <ZoomIn className="mr-2 h-4 w-4" /> Acercar
+            <ZoomIn className="mr-2 h-4 w-4 text-white" /> Acercar
           </>,
           false
         )}
         {renderControlButton(
           'zoom-out',
           <>
-            <ZoomOut className="mr-2 h-4 w-4" /> Alejar
+            <ZoomOut className="mr-2 h-4 w-4 text-white" /> Alejar
           </>,
           false
         )}
