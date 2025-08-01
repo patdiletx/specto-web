@@ -112,8 +112,7 @@ export function RealtimeMissionsList({
       {missions.map((mission) => (
         <Card
           key={mission.id}
-          onClick={() => handleMissionClick(mission)}
-          className="hover:border-primary cursor-pointer transition-all duration-200"
+          className="transition-all duration-200"
         >
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
@@ -135,10 +134,21 @@ export function RealtimeMissionsList({
               </p>
             )}
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex justify-between items-center">
             <p className="text-muted-foreground text-xs">
               Creada: {new Date(mission.created_at).toLocaleDateString()}
             </p>
+            {mission.status === 'pending' && (
+              <span className="text-muted-foreground text-sm font-medium">
+                Esperando un Scout...
+              </span>
+            )}
+            {(mission.status === 'accepted' ||
+              mission.status === 'in_progress') && (
+              <Button onClick={() => handleMissionClick(mission)}>
+                Ir a la Misión
+              </Button>
+            )}
           </CardFooter>
         </Card>
       ))}
