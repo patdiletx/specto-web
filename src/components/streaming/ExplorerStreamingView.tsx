@@ -119,43 +119,47 @@ export function ExplorerStreamingView({
     };
   }, [channelName, userId, isCompleted]);
 
-  // --- RENDERIZADO CONDICIONAL CORREGIDO ---
-  const renderMainContent = () => {
-    // Si la transmisión está activa, mostrar el video
-    if (remoteUser && remoteUser.videoTrack) {
-      return <div id="remote-video-player" className="h-full w-full bg-black"></div>;
-    }
+const renderMainContent = () => {
+  // 1. Si el video del Scout ya está conectado, lo mostramos.
+  if (remoteUser && remoteUser.videoTrack) {
+    return <div id="remote-video-player" className="h-full w-full bg-black"></div>;
+  }
 
-    // Si la misión se completó, mostrar mensaje
-    if (isCompleted) {
-      return (
-        <div className="absolute rounded-lg bg-black/50 p-4 text-center text-white">
+  // 2. Si la misión está completada, mostramos el mensaje de completada.
+  if (isCompleted) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="rounded-lg bg-black/50 p-4 text-center text-white">
           <p className="text-2xl font-semibold">Misión Completada</p>
         </div>
-      );
-    }
-
-    // Si no hay video, mostrar el mapa de seguimiento
-    if (missionLocation) {
-        return (
-            <InteractiveMap
-              center={scoutLocation || missionLocation}
-              scoutLocation={scoutLocation || undefined}
-              markerLocation={missionLocation}
-              isInteractive={true}
-              zoom={15}
-            />
-        );
-    }
-
-    // Estado de carga por defecto
-    return (
-      <div className="absolute p-4 text-center text-white">
-        <p className="text-2xl font-semibold">Esperando al Scout</p>
-        <p className="text-lg text-gray-400">La transmisión comenzará automáticamente.</p>
       </div>
     );
-  };
+  }
+
+  // 3. Si el estado de la misión es 'accepted' (el Scout está en camino), mostramos el mapa.
+  if (mission.status === 'accepted' && missionLocation) {
+    return (
+      <InteractiveMap
+        center={scoutLocation || missionLocation}
+        scoutLocation={scoutLocation || undefined}
+        markerLocation={missionLocation}
+        isInteractive={true}
+        zoom={15}
+      />
+    );
+  }
+
+  // 4. Para cualquier otro caso (como 'in_progress' pero el video aún no llega),
+  //    mostramos un estado de carga genérico.
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="p-4 text-center text-white">
+        <p className="text-2xl font-semibold">Esperando al Scout...</p>
+        <p className="text-lg text-gray-400">La transmisión comenzará automáticamente.</p>
+      </div>
+    </div>
+  );
+};
 
   return (
     <div className="flex h-full w-full flex-col bg-black md:flex-row">

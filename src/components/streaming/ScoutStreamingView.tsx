@@ -215,6 +215,13 @@ export function ScoutStreamingView({
 
       await client.publish([audioTrack, videoTrack]);
 
+      // AÑADIR ESTE BLOQUE
+      await supabase
+        .from('missions')
+        .update({ status: 'in_progress', started_at: new Date().toISOString() })
+        .eq('id', missionId);
+      // FIN DEL BLOQUE A AÑADIR
+
       videoTrack.play('local-video-player');
       setIsJoined(true);
       toast.success('¡Transmisión iniciada!');
