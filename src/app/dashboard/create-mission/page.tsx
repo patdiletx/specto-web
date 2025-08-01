@@ -1,6 +1,7 @@
 // src/app/dashboard/create-mission/page.tsx
 'use client';
 
+import { LocateFixed } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form'; // Importar SubmitHandler
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -58,15 +59,19 @@ export default function CreateMissionPage() {
   const supabase = createClient();
 
   const [mapCenter, setMapCenter] = useState({ lat: 40.416775, lng: -3.70379 });
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null); // Nuevo estado
+  const [mapKey, setMapKey] = useState(Date.now());
 
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setMapCenter({
+          const currentLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
+          };
+          setMapCenter(currentLocation);
+          setUserLocation(currentLocation); // Guarda la ubicación del usuario
         },
         () => {
           toast.info('No se pudo obtener tu ubicación. Se usará la vista por defecto.');
@@ -144,6 +149,17 @@ export default function CreateMissionPage() {
     }
   };
 
+  // Nueva función handler
+  const handleCenterOnUser = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (userLocation) {
+      setMapCenter(userLocation);
+      setMapKey(Date.now());
+    } else {
+      toast.error('No se ha podido acceder a tu ubicación. Revisa los permisos del navegador.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -218,14 +234,26 @@ export default function CreateMissionPage() {
 
           <div className="space-y-4">
             <FormLabel>Ubicación en el Mapa</FormLabel>
-            <div className="rounded-lg border p-1">
+            {/* Añade 'relative' al contenedor del mapa */}
+            <div className="relative rounded-lg border p-1 h-[400px] md:h-full">
               <InteractiveMap
+                key={mapKey}
                 center={mapCenter}
-                zoom={10}
+                zoom={14} // Un zoom inicial más cercano es mejor
                 onMapClick={(coords) =>
                   form.setValue('location', coords, { shouldValidate: true })
                 }
               />
+              {/* Nuevo botón */}
+              <Button
+                type="button"
+                size="icon"
+                className="absolute top-3 left-3 z-10 bg-background/80 backdrop-blur-sm"
+                variant="outline"
+                onClick={handleCenterOnUser}
+              >
+                <LocateFixed className="h-4 w-4" />
+              </Button>
             </div>
             {form.watch('location.lat') !== 0 && (
               <p className="text-muted-foreground text-center text-sm">
