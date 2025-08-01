@@ -80,58 +80,55 @@ export default function InteractiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapContainer.current]);
 
-  useEffect(() => {
+useEffect(() => {
     const mapInstance = map.current;
-    if (!mapInstance) return;
+    if (!mapInstance || !mapInstance.isStyleLoaded()) {
+      // Si el mapa no está listo, no hagas nada todavía.
+      // Se re-ejecutará cuando esté listo.
+      return;
+    }
+
+    // --- Lógica para el marcador de Destino (rojo) ---
+    if (markerLocation) {
+      const missionLngLat: mapboxgl.LngLatLike = [markerLocation.lng, markerLocation.lat];
+      // Solo crea el marcador de destino si NO existe
+      if (!destinationMarkerRef.current) {
+        destinationMarkerRef.current = new mapboxgl.Marker({ color: '#f43f5e' })
+          .setLngLat(missionLngLat)
+          .addTo(mapInstance);
+      }
+    }
 
     // --- Lógica para el marcador del Scout (azul) ---
     if (scoutLocation) {
       const scoutLngLat: mapboxgl.LngLatLike = [scoutLocation.lng, scoutLocation.lat];
+      // Si el marcador del scout ya existe, solo actualiza su posición
       if (scoutMarkerRef.current) {
         scoutMarkerRef.current.setLngLat(scoutLngLat);
       } else {
+        // Si no existe, créalo
         scoutMarkerRef.current = new mapboxgl.Marker({ color: '#3b82f6' })
           .setLngLat(scoutLngLat)
           .addTo(mapInstance);
       }
-      // Centra el mapa en el scout a medida que se mueve
-      mapInstance.panTo(scoutLngLat);
-    }
-
-    // --- Lógica para el marcador de Destino (rojo) ---
-    if (markerLocation && !destinationMarkerRef.current) {
-      const missionLngLat: mapboxgl.LngLatLike = [markerLocation.lng, markerLocation.lat];
-      destinationMarkerRef.current = new mapboxgl.Marker({ color: '#f43f5e' })
-        .setLngLat(missionLngLat)
-        .addTo(mapInstance);
     }
 
     // --- Lógica para la ruta (sin cambios) ---
-    const handleLoad = () => {
-      if (route && !mapInstance.getSource('route')) {
-        mapInstance.addSource('route', { type: 'geojson', data: route });
-        mapInstance.addLayer({
-          id: 'route',
-          type: 'line',
-          source: 'route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#3b82f6', 'line-width': 5, 'line-opacity': 0.75 },
-        });
-      }
-    };
-
-    if (mapInstance.isStyleLoaded()) {
-      handleLoad();
-    } else {
-      mapInstance.on('load', handleLoad);
+    if (route && !mapInstance.getSource('route')) {
+      mapInstance.addSource('route', { type: 'geojson', data: route });
+      mapInstance.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#3b82f6', 'line-width': 5, 'line-opacity': 0.75 },
+      });
+    } else if (route && mapInstance.getSource('route')) {
+      // Asegura que la ruta se actualice si cambia
+      (mapInstance.getSource('route') as mapboxgl.GeoJSONSource).setData(route);
     }
 
-    // Limpieza del listener
-    return () => {
-      mapInstance.off('load', handleLoad);
-    };
-
-}, [scoutLocation, markerLocation, route]); // Dependencias simplificadas
+}, [scoutLocation, markerLocation, route, map.current]); // Asegúrate de que el efecto se ejecute si el mapa cambia
 
   return (
     <div
