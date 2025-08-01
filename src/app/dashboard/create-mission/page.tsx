@@ -1,6 +1,7 @@
 // src/app/dashboard/create-mission/page.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form'; // Importar SubmitHandler
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -55,6 +56,24 @@ type ProcessedMissionData = Omit<FormValues, 'requested_duration_minutes'> & {
 export default function CreateMissionPage() {
   const router = useRouter();
   const supabase = createClient();
+
+  const [mapCenter, setMapCenter] = useState({ lat: 40.416775, lng: -3.70379 });
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setMapCenter({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        () => {
+          toast.info('No se pudo obtener tu ubicación. Se usará la vista por defecto.');
+        }
+      );
+    }
+  }, []); // El array vacío asegura que se ejecute solo una vez
 
   // =================================================================
   // SOLUCIÓN DEFINITIVA - PARTE 2: useForm
@@ -201,7 +220,7 @@ export default function CreateMissionPage() {
             <FormLabel>Ubicación en el Mapa</FormLabel>
             <div className="rounded-lg border p-1">
               <InteractiveMap
-                center={{ lat: 40.416775, lng: -3.70379 }}
+                center={mapCenter}
                 zoom={10}
                 onMapClick={(coords) =>
                   form.setValue('location', coords, { shouldValidate: true })
